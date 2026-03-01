@@ -1,0 +1,74 @@
+version: "3.8"
+
+services:
+  # Web UI to manage all your containers
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: portainer
+    restart: unless-stopped
+    ports:
+      - "9000:9000"        # open in browser: http://<pi-ip>:9000
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./data/portainer:/data
+    networks:
+      - internal
+
+  # n8n automation platform
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"        # http://<pi-ip>:5678
+    environment:
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - N8N_EDITOR_BASE_URL=http://localhost:5678
+      - GENERIC_TIMEZONE=Europe/Berlin
+      # For SQLite (simple, no external DB)
+      - DB_TYPE=sqlite
+    volumes:
+      - ./data/n8n:/home/node/.n8n
+    networks:
+      - internal
+
+  # MariaDB for Piwigo photo gallery
+  piwigo_db:
+    image: mariadb:10.11
+    container_name: piwigo_db
+    restart: unless-stopped
+    environment:
+      - MYSQL_ROOT_PASSWORD=super-secure-root-password
+      - MYSQL_DATABASE=piwigo
+      - MYSQL_USER=piwigo
+      - MYSQL_PASSWORD=super-secure-db-password
+    volumes:
+      - ./data/piwigo_db:/var/lib/mysql
+    networks:
+      - internal
+
+  # Piwigo: self-hosted photo gallery (upload + albums + web UI)
+  piwigo:
+    image: linuxserver/piwigo:latest
+    container_name: piwigo
+    restart: unless-stopped
+    depends_on:
+      - piwigo_db
+    environment:
+      - PUID=1000       # adapt if your user id is different
+      - PGID=1000       # adapt if your group id is different
+      - TZ=Europe/Berlin
+      - PHP_MEMORY_LIMIT=512M
+    volumes:
+      - ./data/piwigo/config:/config
+      - ./data/piwigo/gallery:/gallery   # where your photos live
+    ports:
+      - "8081:80"       # http://<pi-ip>:8081
+    networks:
+      - internal
+
+networks:
+  internal:
+    driver: bridge
